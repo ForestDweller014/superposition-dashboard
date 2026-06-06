@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  base: "/superposition-dashboard/",
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
