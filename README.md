@@ -1,4 +1,3 @@
-md
 # Sparse Superposition Capacity Under a Welch-Style Approximation
 
 ## Setup
