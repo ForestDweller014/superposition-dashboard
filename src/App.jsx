@@ -141,7 +141,6 @@ function TeXDocument() {
     <Card className="rounded-2xl shadow-sm">
       <CardHeader>
         <CardTitle>Sparse Superposition Capacity Under a Welch-Style Approximation</CardTitle>
-        <CardDescription>Rendered theorem notes from the uploaded TeX file.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 text-sm leading-7 text-slate-700">
         <section className="space-y-3">
