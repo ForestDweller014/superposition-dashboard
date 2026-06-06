@@ -1,4 +1,4 @@
-```md
+md
 # Sparse Superposition Capacity Under a Welch-Style Approximation
 
 ## Setup
@@ -392,4 +392,3 @@ K(E)
 \qquad
 (M=cK).
 $$
-```
