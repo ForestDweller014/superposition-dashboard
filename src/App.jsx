@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,7 +6,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -103,8 +102,22 @@ function MathText({ children }) {
 
 function MathBlock({ children }) {
   return (
-    <div className="overflow-x-auto rounded-xl bg-slate-50 p-3">
+    <div className="math-block overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-900">
       {String.raw`\[${children}\]`}
+    </div>
+  );
+}
+
+function ConceptStep({ number, title, children }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
+          {number}
+        </span>
+        <h3 className="font-semibold text-slate-900">{title}</h3>
+      </div>
+      <p className="text-sm leading-6 text-slate-600">{children}</p>
     </div>
   );
 }
@@ -140,11 +153,14 @@ function TeXDocument() {
   return (
     <Card className="rounded-2xl shadow-sm">
       <CardHeader>
-        <CardTitle>Sparse Superposition Capacity Under a Welch-Style Approximation</CardTitle>
+        <CardTitle>Formal model and derivation</CardTitle>
+        <CardDescription>
+          The equations behind the curve. The plain-language walkthrough above is enough to use the dashboard.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 text-sm leading-7 text-slate-700">
         <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-slate-900">Setup</h2>
+          <h2 className="text-xl font-semibold text-slate-900">Definitions</h2>
           <p>Let</p>
           <MathBlock>{String.raw`X = \sum_{j=1}^K a_j v_j,`}</MathBlock>
           <p>
@@ -162,6 +178,11 @@ function TeXDocument() {
             from the superposed vector
             <MathText>{String.raw` \(X\)`}</MathText>.
           </p>
+          <p>
+            Mechanistically, <MathText>{String.raw`\(M\)`}</MathText> counts all feature directions available to the
+            representation, while <MathText>{String.raw`\(K\)`}</MathText> counts only the features active in this one
+            superposed state.
+          </p>
         </section>
 
         <section className="space-y-3">
@@ -172,7 +193,9 @@ function TeXDocument() {
           <MathBlock>{String.raw`\epsilon^2 \approx \max\!\left(0,\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right).`}</MathBlock>
           <p>
             This is a heuristic substitution of the ambient dimension by an effective sparse dimension. It should be
-            interpreted as an approximation rather than a sharp theorem for arbitrary sparse ensembles.
+            interpreted as an approximation rather than a sharp theorem for arbitrary sparse ensembles. The ordinary
+            Welch expression is a bound on average squared overlap; using it as an exact variance assumes a well-spread,
+            near-bound-achieving dictionary.
           </p>
         </section>
 
@@ -286,8 +309,10 @@ export default function SparseSuperpositionKPlot() {
 
   const derived = useMemo(() => {
     const dEff = effectiveDimension(N, s);
+    const supportSize = supportCountFromInput(s, N);
     const thresholdK = dEff > 0 && mFactor > 0 ? dEff / mFactor : NaN;
-    const asymptoticE = dEff > 0 ? 1 / Math.sqrt(dEff) : 1;
+    const exampleE = 0.1;
+    const example = solveKFromE(exampleE, N, s, mFactor);
     const eMax = 1;
     const points = [];
     const pointCount = 220;
@@ -308,111 +333,202 @@ export default function SparseSuperpositionKPlot() {
 
     return {
       dEff,
+      supportSize,
       thresholdK,
-      asymptoticE,
+      exampleE,
+      exampleK: example.K,
+      exampleM: example.K * mFactor,
       eMax,
       points,
     };
   }, [N, s, mFactor]);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Sparse superposition capacity: K(E)</h1>
-          <p className="max-w-4xl text-sm text-slate-600">
-            This tool plots the recovered capacity K as a function of the tolerated readout-error standard deviation E,
-            using a sparse Welch-style approximation with an effective dimension d_eff.
+    <div className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+      <main className="mx-auto max-w-7xl space-y-8">
+        <header className="max-w-4xl space-y-4">
+          <div className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
+            Mechanistic interpretability · interactive model
+          </div>
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+            How many features can share one representation?
+          </h1>
+          <p className="max-w-3xl text-lg leading-8 text-slate-600">
+            Neural networks can encode more possible features than they have activation dimensions by placing feature
+            directions in superposition. This calculator shows the cost: unrelated active features leak into a linear
+            readout as cross-talk.
           </p>
-        </div>
+        </header>
+
+        <Card className="rounded-2xl border-blue-100 bg-blue-50/70 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-lg">The question this dashboard answers</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm leading-6 text-slate-700">
+            <p>
+              Given a representation width, a feature sparsity, and an acceptable amount of readout noise, the model
+              estimates how many features can be active at the same time.
+            </p>
+            <p>
+              It is an analytic intuition-builder, not a measurement of a trained network and not a universal capacity
+              guarantee. The calculation assumes a simple dot-product decoder and a well-spread dictionary of feature
+              directions.
+            </p>
+          </CardContent>
+        </Card>
+
+        <section aria-labelledby="mechanism-heading" className="space-y-4">
+          <div className="space-y-1">
+            <h2 id="mechanism-heading" className="text-2xl font-semibold text-slate-950">The mechanism</h2>
+            <p className="text-sm text-slate-600">Follow one feature from encoding to readout.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <ConceptStep number="1" title="Encode">
+              Each possible feature gets a unit direction vᵢ in an N-dimensional activation space. Sparsity controls how
+              many coordinates that direction uses.
+            </ConceptStep>
+            <ConceptStep number="2" title="Superpose">
+              One state X adds together the K features that are currently active. M is the larger dictionary of all
+              possible feature directions.
+            </ConceptStep>
+            <ConceptStep number="3" title="Decode">
+              Taking the dot product with vᵢ returns the desired coefficient aᵢ plus leakage from every other active
+              direction. E measures the typical size of that leakage.
+            </ConceptStep>
+          </div>
+          <Card className="rounded-2xl shadow-sm">
+            <CardContent className="grid gap-4 py-6 lg:grid-cols-2">
+              <div className="space-y-2">
+                <p className="font-semibold text-slate-900">The shared representation</p>
+                <MathBlock>{String.raw`X=\sum_{j=1}^{K}a_jv_j`}</MathBlock>
+              </div>
+              <div className="space-y-2">
+                <p className="font-semibold text-slate-900">The readout: signal plus cross-talk</p>
+                <MathBlock>{String.raw`\langle X,v_i\rangle=a_i+\underbrace{\sum_{j\ne i}a_j\langle v_j,v_i\rangle}_{\eta_i}`}</MathBlock>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <Card className="rounded-2xl shadow-sm lg:col-span-1">
             <CardHeader>
-              <CardTitle>Controls</CardTitle>
-              <CardDescription>Each parameter has both a slider and a free-form input.</CardDescription>
+              <CardTitle>Model inputs</CardTitle>
+              <CardDescription>Change the representational setup; the capacity curve updates automatically.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-8">
-              <div className="space-y-3">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <Label htmlFor="Ninput" style={{ minWidth: 18 }}>N</Label>
+            <CardContent className="space-y-7">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <Label htmlFor="Ninput">N · representation width</Label>
                   <Input
                     id="Ninput"
+                    aria-describedby="Nhelp"
                     value={NText}
                     onChange={(e) => setNText(e.target.value)}
-                    className="max-w-[180px]"
+                    className="max-w-28"
                   />
                 </div>
                 <input
+                  aria-label="N representation width"
                   type="range"
                   min="1"
                   max="4096"
                   step="1"
                   value={Number.isFinite(N) ? clamp(N, 1, 4096) : 1024}
                   onChange={(e) => setNText(e.target.value)}
-                  style={{ width: '100%' }}
+                  className="w-full"
                 />
+                <p id="Nhelp" className="text-xs leading-5 text-slate-500">
+                  Number of activation coordinates available to the representation—for example, neurons or channels.
+                </p>
               </div>
 
-              <div className="space-y-3">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <Label htmlFor="sinput" style={{ minWidth: 18 }}>s</Label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <Label htmlFor="sinput">s · feature sparsity</Label>
                   <Input
                     id="sinput"
+                    aria-describedby="shelp"
                     value={sText}
                     onChange={(e) => setSText(e.target.value)}
-                    className="max-w-[180px]"
+                    className="max-w-28"
                   />
                 </div>
                 <input
+                  aria-label="s feature sparsity"
                   type="range"
                   min="0.001"
                   max="1"
                   step="0.001"
                   value={Number.isFinite(s) ? clamp(s, 0.001, 1) : 0.25}
                   onChange={(e) => setSText(e.target.value)}
-                  style={{ width: '100%' }}
+                  className="w-full"
                 />
-                <p className="text-xs text-slate-500">
-                  If s is between 0 and 1, it is treated as a density so the support size is s times N. If s is greater
-                  than 1, it is treated as a direct support count.
+                <p id="shelp" className="text-xs leading-5 text-slate-500">
+                  From 0 to 1, s is the fraction of coordinates used by each feature. Above 1, a typed value is treated
+                  as the support count directly.
                 </p>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between gap-4">
-                  <Label htmlFor="minput">M_factor</Label>
+                  <Label htmlFor="minput">c · dictionary/activity ratio</Label>
                   <Input
                     id="minput"
+                    aria-describedby="chelp"
                     value={mText}
                     onChange={(e) => setMText(e.target.value)}
-                    className="max-w-[180px]"
+                    className="max-w-28"
                   />
                 </div>
                 <input
+                  aria-label="c dictionary to activity ratio"
                   type="range"
                   min="1"
                   max="1000"
                   step="1"
                   value={Number.isFinite(mFactor) ? clamp(mFactor, 1, 1000) : 4}
                   onChange={(e) => setMText(e.target.value)}
-                  style={{ width: '100%' }}
+                  className="w-full"
                 />
-                <p className="text-xs text-slate-500">The app imposes M = M_factor × K.</p>
+                <p id="chelp" className="text-xs leading-5 text-slate-500">
+                  The model sets M = cK. At c = 4, the full dictionary contains four possible features for every feature
+                  active in one state.
+                </p>
               </div>
+
+              {valid && (
+                <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
+                  <p className="font-semibold text-slate-900">Current setup</p>
+                  <dl className="space-y-2 text-slate-600">
+                    <div className="flex justify-between gap-4">
+                      <dt>Coordinates per direction</dt>
+                      <dd className="font-medium text-slate-900">{fmt(derived.supportSize)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt>Effective dimension d_eff</dt>
+                      <dd className="font-medium text-slate-900">{fmt(derived.dEff)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt>Orthogonal-limit K = d_eff/c</dt>
+                      <dd className="font-medium text-slate-900">{fmt(derived.thresholdK)}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           <Card className="rounded-2xl shadow-sm lg:col-span-2">
             <CardHeader>
-              <CardTitle>Plot of K(E)</CardTitle>
+              <CardTitle>Capacity/error trade-off</CardTitle>
               <CardDescription>
-                The curve is generated from the closed-form quadratic branch implied by the sparse Welch-style error model.
+                Each point gives the approximate active-feature count K at a tolerated readout-error scale E.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               {valid ? (
-                <div style={{ width: '100%', height: 420 }}>
+                <div className="h-[420px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={derived.points} margin={{ top: 10, right: 24, left: 6, bottom: 10 }}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -422,31 +538,87 @@ export default function SparseSuperpositionKPlot() {
                         domain={[0, 1]}
                         ticks={[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]}
                         tickFormatter={fmtAxisDecimal}
-                        label={{ value: 'E', position: 'insideBottom', offset: -2 }}
+                        label={{ value: 'Readout error E', position: 'insideBottom', offset: -2 }}
                       />
-                      <YAxis tickFormatter={fmt} label={{ value: 'K', angle: -90, position: 'insideLeft' }} />
+                      <YAxis tickFormatter={fmt} label={{ value: 'Active features K', angle: -90, position: 'insideLeft' }} />
                       <Tooltip
-                        formatter={(value, name) => [fmt(Number(value)), name]}
-                        labelFormatter={(label) => 'E = ' + fmtAxisDecimal(Number(label))}
+                        formatter={(value) => [fmt(Number(value)), 'Active features K']}
+                        labelFormatter={(label) => 'Readout error E = ' + fmt(Number(label))}
                       />
-                      <ReferenceLine
-                        x={derived.asymptoticE}
-                        strokeDasharray="4 4"
-                        label={derived.asymptoticE <= 1 ? '1/sqrt(d_eff)' : undefined}
-                      />
-                      <Line type="monotone" dataKey="K" dot={false} strokeWidth={2} isAnimationActive={false} />
+                      <Line type="monotone" dataKey="K" dot={false} stroke="#2563eb" strokeWidth={2.5} isAnimationActive={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="text-sm text-slate-600">Enter positive values for N, s, and M_factor.</div>
+                <div className="py-24 text-center text-sm text-slate-600">Enter positive values for N, s, and c.</div>
+              )}
+              <p className="text-sm leading-6 text-slate-600">
+                Read the curve up and to the right: accepting more typical decoder noise permits more active features.
+                Hover over the line for exact values. The curve is the model's analytic equality boundary, not observed
+                network performance.
+              </p>
+              {valid && Number.isFinite(derived.exampleK) && (
+                <p className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
+                  <strong>Concrete reading:</strong> with the current inputs, an error scale of E = {fmt(derived.exampleE)}
+                  {' '}corresponds to about K = {fmt(derived.exampleK)} simultaneously active features and a total
+                  dictionary size M = cK ≈ {fmt(derived.exampleM)}.
+                </p>
               )}
             </CardContent>
           </Card>
         </div>
 
+        <section className="grid gap-6 lg:grid-cols-2">
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle>Why interference grows</CardTitle>
+              <CardDescription>The causal chain behind the plotted trade-off.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm leading-6 text-slate-600">
+              <p>
+                Once the dictionary has more directions than the effective dimension can keep orthogonal, distinct
+                feature vectors overlap. The model calls the typical pairwise overlap ε.
+              </p>
+              <p>
+                A readout sees cross-talk from K − 1 other active features. If those terms are roughly independent, their
+                variances add, giving E = √(K − 1) ε. More representational width lowers overlap; more simultaneous
+                features create more noise terms.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle>Symbol glossary</CardTitle>
+              <CardDescription>The same symbols are used in the chart, explanation, and derivation.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                <div><dt className="font-semibold text-slate-900">M · possible features</dt><dd className="text-slate-600">Size of the full feature dictionary.</dd></div>
+                <div><dt className="font-semibold text-slate-900">K · active features</dt><dd className="text-slate-600">Features present in one state.</dd></div>
+                <div><dt className="font-semibold text-slate-900">d_eff · effective dimension</dt><dd className="text-slate-600">Usable dimension after sparsity.</dd></div>
+                <div><dt className="font-semibold text-slate-900">ε · pair overlap</dt><dd className="text-slate-600">Cross-talk scale from one direction.</dd></div>
+                <div><dt className="font-semibold text-slate-900">E · readout error</dt><dd className="text-slate-600">Combined cross-talk standard deviation.</dd></div>
+                <div><dt className="font-semibold text-slate-900">aᵢ · feature strength</dt><dd className="text-slate-600">Coefficient the readout tries to recover.</dd></div>
+              </dl>
+            </CardContent>
+          </Card>
+        </section>
+
+        <Card className="rounded-2xl border-amber-200 bg-amber-50 shadow-sm">
+          <CardHeader>
+            <CardTitle>What this model assumes</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 text-sm leading-6 text-amber-950 md:grid-cols-2">
+            <p>Feature coefficients are unit-scale, and cross-talk terms are approximately independent and Gaussian.</p>
+            <p>Sparsity is summarized by d_eff, so support geometry and correlations between learned features are omitted.</p>
+            <p>The Welch-style expression is treated as an overlap variance, which assumes a well-spread dictionary.</p>
+            <p>The result describes a dot-product decoder; nonlinear or learned decoders may behave differently.</p>
+          </CardContent>
+        </Card>
+
         <TeXDocument />
-      </div>
+      </main>
     </div>
   );
 }
