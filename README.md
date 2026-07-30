@@ -48,9 +48,9 @@ The desired signal is `a_i`. Every other active feature contributes cross-talk a
 | `N` | Ambient dimension | Number of available activation coordinates, such as neurons or channels. |
 | `s` | Sparsity setting | Fraction of coordinates used by each feature, restricted to `0 < s <= 1`. |
 | `d_eff` | Effective dimension | The model's estimate of how many coordinates are effectively available to each sparse direction. |
-| `M` | Dictionary size | Total number of possible feature directions stored in the representation. |
+| `M` | Dictionary size | Fixed total number of possible feature directions. Set it directly or derive it from `M = cN`. |
 | `K` | Active-feature count | Number of features simultaneously present in one state `X`. This is the plotted capacity. |
-| `c` | Dictionary/activity ratio | The dashboard imposes `M = cK`. A value of `c = 4` means four possible features for every simultaneously active feature. |
+| `c` | Dictionary/width ratio | The dashboard uses `M = cN`. A value of `c = 4` means four possible feature directions per embedding dimension. |
 | `epsilon` | Pairwise overlap scale | Typical correlation between two distinct feature directions. |
 | `E` | Readout-error scale | Standard deviation of the accumulated cross-talk when one feature is decoded. |
 
@@ -70,9 +70,10 @@ For example, `N = 1024` and `s = 0.25` give `d_eff = 256`: each feature directio
 - The vertical axis is `K`, the approximate number of simultaneously active features at that error level.
 - Increasing `N` usually increases capacity because there is more representational room.
 - Decreasing fractional `s` reduces `d_eff` in this heuristic, which increases overlap and reduces capacity.
-- Increasing `c` means the representation must accommodate a larger total dictionary `M = cK` for the same active count.
+- Increasing `c` increases the fixed dictionary size `M = cN`, creating more possible feature directions in the same embedding.
+- Editing `c` updates `M`; editing `M` directly updates `c = M/N`.
 
-The plotted curve is the high-capacity solution of the model's equality condition. Points below that error boundary are interpreted as feasible under the approximation; the curve is not an empirical confidence interval or a guaranteed maximum.
+Every point on the curve uses the same fixed `N` and `M`; only the tolerated error and resulting active count change. Points below the error boundary are interpreted as feasible under the approximation. The curve is not an empirical confidence interval or a guaranteed maximum.
 
 ## Where the curve comes from
 
@@ -94,32 +95,20 @@ Assuming unit-scale coefficients and approximately independent cross-talk terms,
 E = \sqrt{K-1}\,\epsilon.
 ```
 
-If `M` is independent of `K`, solving for `K` gives
+The dashboard fixes the dictionary using
 
 ```math
-K = 1 + \frac{E^2}{\epsilon^2}
-= 1 + \frac{E^2 d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}}.
+M=cN.
 ```
 
-The dashboard instead imposes `M = cK`. Substitution produces the quadratic
+Because `M` is independent of `K`, solving for `K` gives
 
 ```math
-cK^2
-- \left((c+d_{\mathrm{eff}})+cE^2d_{\mathrm{eff}}\right)K
-+ \left(d_{\mathrm{eff}}+E^2d_{\mathrm{eff}}\right)
-= 0.
+K(E)=\min\!\left(M,1+\frac{E^2}{\epsilon^2}\right)
+=\min\!\left(M,1+\frac{E^2 d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}}\right).
 ```
 
-The plotted high-capacity branch is
-
-```math
-K(E)=
-\frac{
-(c+d_{\mathrm{eff}})+cE^2d_{\mathrm{eff}}
-+\sqrt{\left((c+d_{\mathrm{eff}})+cE^2d_{\mathrm{eff}}\right)^2
--4c\left(d_{\mathrm{eff}}+E^2d_{\mathrm{eff}}\right)}
-}{2c}.
-```
+The cap at `M` enforces that no more features can be active than exist in the dictionary. The fraction form applies when `M > d_eff`. When `M <= d_eff`, the approximation gives zero overlap and permits all `M` dictionary features to be active without cross-talk.
 
 ## Assumptions and limitations
 

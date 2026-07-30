@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,6 +42,12 @@ function fmtAxisDecimal(x) {
   return x.toFixed(1);
 }
 
+function fmtInput(x) {
+  if (!Number.isFinite(x)) return '';
+  if (Number.isInteger(x)) return String(x);
+  return trimTrailingZeros(x.toFixed(6));
+}
+
 function supportCountFromInput(s, N) {
   if (!Number.isFinite(s) || s <= 0 || s > 1 || !Number.isFinite(N) || N <= 0) return 0;
   return s * N;
@@ -62,38 +68,21 @@ function epsilonSquaredFromM(M, N, s) {
   return numerator / denominator;
 }
 
-function epsilonWelchSparse(K, N, s, mFactor) {
-  const M = mFactor * K;
-  return Math.sqrt(Math.max(0, epsilonSquaredFromM(M, N, s)));
-}
-
-function solveKFromE(E, N, s, mFactor) {
+function solveKFromE(E, M, N, s) {
   const dEff = effectiveDimension(N, s);
-  const c = mFactor;
 
-  if (!(dEff > 0) || !(c > 0) || !(E >= 0)) {
-    return { K: NaN, dEff, discriminant: NaN, thresholdK: NaN };
+  if (!(dEff > 0) || !(M >= 1) || !(E >= 0)) {
+    return { K: NaN, dEff, epsilonSquared: NaN };
   }
 
-  const y = E * E * dEff;
-  const A = c;
-  const B = -((c + dEff) + c * y);
-  const C = dEff + y;
-  const discriminant = B * B - 4 * A * C;
-  const thresholdK = dEff / c;
+  const epsilonSquared = epsilonSquaredFromM(M, N, s);
 
-  if (discriminant < 0) {
-    return { K: NaN, dEff, discriminant, thresholdK };
+  if (epsilonSquared === 0) {
+    return { K: M, dEff, epsilonSquared };
   }
 
-  const sqrtDisc = Math.sqrt(discriminant);
-  const root1 = (-B - sqrtDisc) / (2 * A);
-  const root2 = (-B + sqrtDisc) / (2 * A);
-
-  let K = Math.max(root1, root2);
-  if (E === 0) K = Math.max(1, thresholdK);
-
-  return { K, dEff, discriminant, thresholdK };
+  const K = Math.min(M, 1 + (E * E) / epsilonSquared);
+  return { K, dEff, epsilonSquared };
 }
 
 function InlineMath({ children }) {
@@ -206,16 +195,18 @@ function TeXDocument() {
           <MathBlock>{String.raw`\beta \approx \mathcal{N}\!\left(0,(K-1)\epsilon^2\right).`}</MathBlock>
           <p>Therefore the readout-error standard deviation is</p>
           <MathBlock>{String.raw`E = \sqrt{K-1}\,\epsilon.`}</MathBlock>
-          <p>If <InlineMath>{String.raw`M`}</InlineMath> is treated as free, then</p>
-          <MathBlock>{String.raw`K = 1 + \frac{E^2}{\epsilon^2}
-= 1 + \frac{E^2 d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}}.`}</MathBlock>
           <p>
-            If one imposes <InlineMath>{String.raw`M=cK`}</InlineMath> with <InlineMath>{String.raw`c>0`}</InlineMath>,
-            then <InlineMath>{String.raw`K`}</InlineMath> obeys
+            The dashboard fixes the dictionary size with <InlineMath>{String.raw`M=cN`}</InlineMath>. When{' '}
+            <InlineMath>{String.raw`\epsilon>0`}</InlineMath>, solving for the active-feature count gives
           </p>
-          <MathBlock>{String.raw`cK^2 - \bigl((c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}}\bigr)K + \bigl(d_{\mathrm{eff}} + E^2 d_{\mathrm{eff}}\bigr) = 0,`}</MathBlock>
-          <p>and the relevant branch is</p>
-          <MathBlock>{String.raw`K(E) = \frac{(c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}} + \sqrt{\bigl((c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}}\bigr)^2 - 4c\bigl(d_{\mathrm{eff}} + E^2 d_{\mathrm{eff}}\bigr)}}{2c}.`}</MathBlock>
+          <MathBlock>{String.raw`K(E)=\min\!\left(M,\,1+\frac{E^2}{\epsilon^2}\right)
+=\min\!\left(M,\,1+\frac{E^2d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}}\right),\qquad M=cN.`}</MathBlock>
+          <p>
+            The cap at <InlineMath>{String.raw`M`}</InlineMath> enforces that no more features can be active than exist in
+            the dictionary. If <InlineMath>{String.raw`M\le d_{\mathrm{eff}}`}</InlineMath>, the approximation gives zero
+            overlap and the model permits all <InlineMath>{String.raw`M`}</InlineMath> features to be active without
+            cross-talk.
+          </p>
         </section>
 
         <section className="space-y-3">
@@ -250,29 +241,10 @@ function TeXDocument() {
 E = \sqrt{K-1}\,\epsilon.`}</MathBlock>
           <p>
             Solving <InlineMath>{String.raw`E^2=(K-1)\epsilon^2`}</InlineMath> gives{' '}
-            <InlineMath>{String.raw`K=1+E^2/\epsilon^2`}</InlineMath>. Substituting{' '}
-            <InlineMath>{String.raw`M=cK`}</InlineMath> gives
+            <InlineMath>{String.raw`K=1+E^2/\epsilon^2`}</InlineMath>. Because the dictionary is fixed by{' '}
+            <InlineMath>{String.raw`M=cN`}</InlineMath>, no quadratic is required.
           </p>
-          <MathBlock>{String.raw`E^2 = (K-1)\frac{cK-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(cK-1)}.`}</MathBlock>
-          <p>Multiplying through and moving all terms to one side gives</p>
-          <MathBlock>{String.raw`0 = cK^2 - \bigl((c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}}\bigr)K + \bigl(d_{\mathrm{eff}} + E^2 d_{\mathrm{eff}}\bigr).`}</MathBlock>
-          <p>Taking the larger quadratic branch gives the plotted formula for <InlineMath>{String.raw`K(E)`}</InlineMath>.</p>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-slate-900">Corollary</h2>
-          <p>
-            To express the readout error distribution directly in terms of <InlineMath>{String.raw`M`}</InlineMath> and{' '}
-            <InlineMath>{String.raw`d_{\mathrm{eff}}`}</InlineMath>, substitute the overlap variance:
-          </p>
-          <MathBlock>{String.raw`\beta \approx \mathcal{N}\!\left(0,(K-1)\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right).`}</MathBlock>
-          <p>Hence the readout-error standard deviation is</p>
-          <MathBlock>{String.raw`E = \sqrt{(K-1)\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}}.`}</MathBlock>
-          <p>
-            If, in addition, <InlineMath>{String.raw`M=cK`}</InlineMath>, then{' '}
-            <InlineMath>{String.raw`K=M/c`}</InlineMath>, and this becomes
-          </p>
-          <MathBlock>{String.raw`\beta \approx \mathcal{N}\!\left(0,\left(\frac{M}{c}-1\right)\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right).`}</MathBlock>
+          <MathBlock>{String.raw`K(E)=\min\!\left(M,\,1+\frac{E^2d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}}\right),\qquad M=cN.`}</MathBlock>
         </section>
 
         <section className="space-y-3">
@@ -285,9 +257,8 @@ E = \sqrt{K-1}\,\epsilon.`}</MathBlock>
 \qquad
 E = \sqrt{K-1}\,\epsilon,`}</MathBlock>
           <MathBlock>{String.raw`K = 1 + \frac{E^2}{\epsilon^2}
-= 1 + \frac{E^2 d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}},`}</MathBlock>
-          <MathBlock>{String.raw`K(E) = \frac{(c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}} + \sqrt{\bigl((c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}}\bigr)^2 - 4c\bigl(d_{\mathrm{eff}} + E^2 d_{\mathrm{eff}}\bigr)}}{2c}
-\qquad (M=cK).`}</MathBlock>
+= 1 + \frac{E^2 d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}}.`}</MathBlock>
+          <MathBlock>{String.raw`M=cN,\qquad K(E)=\min\!\left(M,\,1+\frac{E^2}{\epsilon^2}\right).`}</MathBlock>
         </section>
       </CardContent>
     </Card>
@@ -297,37 +268,59 @@ E = \sqrt{K-1}\,\epsilon,`}</MathBlock>
 export default function SparseSuperpositionKPlot() {
   const [NText, setNText] = useState('1024');
   const [sText, setSText] = useState('0.25');
-  const [mText, setMText] = useState('4');
+  const [cText, setCText] = useState('4');
+  const [MText, setMText] = useState('4096');
 
   const N = parseNumber(NText);
   const s = parseNumber(sText);
-  const mFactor = parseNumber(mText);
+  const c = parseNumber(cText);
+  const M = parseNumber(MText);
 
   const validN = Number.isFinite(N) && N > 0;
   const validS = Number.isFinite(s) && s > 0 && s <= 1;
-  const validFactor = Number.isFinite(mFactor) && mFactor > 0;
-  const valid = validN && validS && validFactor;
+  const validC = Number.isFinite(c) && c > 0;
+  const validM = Number.isFinite(M) && M >= 1;
+  const valid = validN && validS && validC && validM;
 
-  const derived = useMemo(() => {
+  const updateN = (value) => {
+    setNText(value);
+    const nextN = parseNumber(value);
+    const currentC = parseNumber(cText);
+    if (nextN > 0 && currentC > 0) setMText(fmtInput(currentC * nextN));
+  };
+
+  const updateC = (value) => {
+    setCText(value);
+    const nextC = parseNumber(value);
+    if (nextC > 0 && validN) setMText(fmtInput(nextC * N));
+  };
+
+  const updateM = (value) => {
+    setMText(value);
+    const nextM = parseNumber(value);
+    if (nextM >= 1 && validN) setCText(fmtInput(nextM / N));
+  };
+
+  const derived = (() => {
     const dEff = effectiveDimension(N, s);
     const supportSize = supportCountFromInput(s, N);
-    const thresholdK = dEff > 0 && mFactor > 0 ? dEff / mFactor : NaN;
+    const epsilonSquared = epsilonSquaredFromM(M, N, s);
+    const epsilon = Math.sqrt(epsilonSquared);
     const exampleE = 0.1;
-    const example = solveKFromE(exampleE, N, s, mFactor);
+    const example = solveKFromE(exampleE, M, N, s);
     const eMax = 1;
     const points = [];
     const pointCount = 220;
 
     for (let i = 0; i < pointCount; i += 1) {
       const E = (i / (pointCount - 1)) * eMax;
-      const result = solveKFromE(E, N, s, mFactor);
+      const result = solveKFromE(E, M, N, s);
       if (Number.isFinite(result.K) && result.K >= 1) {
-        const epsilon = epsilonWelchSparse(result.K, N, s, mFactor);
         points.push({
           E,
           K: result.K,
           epsilon,
-          M: mFactor * result.K,
+          M,
         });
       }
     }
@@ -335,14 +328,13 @@ export default function SparseSuperpositionKPlot() {
     return {
       dEff,
       supportSize,
-      thresholdK,
+      epsilon,
       exampleE,
       exampleK: example.K,
-      exampleM: example.K * mFactor,
       eMax,
       points,
     };
-  }, [N, s, mFactor]);
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
@@ -425,7 +417,7 @@ export default function SparseSuperpositionKPlot() {
                     id="Ninput"
                     aria-describedby="Nhelp"
                     value={NText}
-                    onChange={(e) => setNText(e.target.value)}
+                    onChange={(e) => updateN(e.target.value)}
                     className="max-w-28"
                   />
                 </div>
@@ -436,7 +428,7 @@ export default function SparseSuperpositionKPlot() {
                   max="4096"
                   step="1"
                   value={Number.isFinite(N) ? clamp(N, 1, 4096) : 1024}
-                  onChange={(e) => setNText(e.target.value)}
+                  onChange={(e) => updateN(e.target.value)}
                   className="w-full"
                 />
                 <p id="Nhelp" className="text-xs leading-5 text-slate-500">
@@ -479,28 +471,55 @@ export default function SparseSuperpositionKPlot() {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-4">
-                  <Label htmlFor="minput">c · dictionary/activity ratio</Label>
+                  <Label htmlFor="cinput">c · dictionary/width ratio</Label>
                   <Input
-                    id="minput"
+                    id="cinput"
                     aria-describedby="chelp"
-                    value={mText}
-                    onChange={(e) => setMText(e.target.value)}
+                    aria-invalid={!validC}
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    value={cText}
+                    onChange={(e) => updateC(e.target.value)}
                     className="max-w-28"
                   />
                 </div>
                 <input
-                  aria-label="c dictionary to activity ratio"
+                  aria-label="c dictionary to representation width ratio"
                   type="range"
                   min="1"
                   max="1000"
                   step="1"
-                  value={Number.isFinite(mFactor) ? clamp(mFactor, 1, 1000) : 4}
-                  onChange={(e) => setMText(e.target.value)}
+                  value={Number.isFinite(c) ? clamp(c, 1, 1000) : 4}
+                  onChange={(e) => updateC(e.target.value)}
                   className="w-full"
                 />
-                <p id="chelp" className="text-xs leading-5 text-slate-500">
-                  The model sets M = cK. At c = 4, the full dictionary contains four possible features for every feature
-                  active in one state.
+                <p id="chelp" className={`text-xs leading-5 ${validC ? 'text-slate-500' : 'font-medium text-red-600'}`}>
+                  {validC
+                    ? 'The model sets M = cN. At c = 4, the dictionary contains four possible features per embedding dimension.'
+                    : 'Enter a positive dictionary-to-width ratio.'}
+                </p>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-slate-200 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <Label htmlFor="Minput">M · dictionary size</Label>
+                  <Input
+                    id="Minput"
+                    aria-describedby="Mhelp"
+                    aria-invalid={!validM}
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={MText}
+                    onChange={(e) => updateM(e.target.value)}
+                    className="max-w-32"
+                  />
+                </div>
+                <p id="Mhelp" className={`text-xs leading-5 ${validM ? 'text-slate-500' : 'font-medium text-red-600'}`}>
+                  {validM
+                    ? 'Set M directly here. The c field updates to preserve c = M/N.'
+                    : 'Enter a dictionary containing at least one possible feature.'}
                 </p>
               </div>
 
@@ -517,8 +536,12 @@ export default function SparseSuperpositionKPlot() {
                       <dd className="font-medium text-slate-900">{fmt(derived.dEff)}</dd>
                     </div>
                     <div className="flex justify-between gap-4">
-                      <dt>Orthogonal-limit K = d_eff/c</dt>
-                      <dd className="font-medium text-slate-900">{fmt(derived.thresholdK)}</dd>
+                      <dt>Dictionary size M = cN</dt>
+                      <dd className="font-medium text-slate-900">{fmt(M)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt>Pairwise overlap ε</dt>
+                      <dd className="font-medium text-slate-900">{fmt(derived.epsilon)}</dd>
                     </div>
                   </dl>
                 </div>
@@ -530,7 +553,7 @@ export default function SparseSuperpositionKPlot() {
             <CardHeader>
               <CardTitle>Capacity/error trade-off</CardTitle>
               <CardDescription>
-                Each point gives the approximate active-feature count K at a tolerated readout-error scale E.
+                Holding N and M fixed, each point gives the approximate active-feature count K at error scale E.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -558,19 +581,19 @@ export default function SparseSuperpositionKPlot() {
                 </div>
               ) : (
                 <div className="py-24 text-center text-sm text-slate-600">
-                  Enter positive values for N and c, and a sparsity s greater than 0 and at most 1.
+                  Enter positive values for N, c, and M, and a sparsity s greater than 0 and at most 1.
                 </div>
               )}
               <p className="text-sm leading-6 text-slate-600">
                 Read the curve up and to the right: accepting more typical decoder noise permits more active features.
-                Hover over the line for exact values. The curve is the model's analytic equality boundary, not observed
-                network performance.
+                Every point describes the same fixed dictionary. Hover over the line for exact values. The curve is the
+                model's analytic equality boundary, not observed network performance.
               </p>
               {valid && Number.isFinite(derived.exampleK) && (
                 <p className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
                   <strong>Concrete reading:</strong> with the current inputs, an error scale of E = {fmt(derived.exampleE)}
-                  {' '}corresponds to about K = {fmt(derived.exampleK)} simultaneously active features and a total
-                  dictionary size M = cK ≈ {fmt(derived.exampleM)}.
+                  {' '}corresponds to about K = {fmt(derived.exampleK)} simultaneously active features out of the fixed
+                  dictionary of M = {fmt(M)} possible features.
                 </p>
               )}
             </CardContent>
