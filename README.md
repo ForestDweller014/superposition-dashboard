@@ -46,7 +46,7 @@ The desired signal is `a_i`. Every other active feature contributes cross-talk a
 | Symbol | Meaning | Mechanistic interpretation |
 | --- | --- | --- |
 | `N` | Ambient dimension | Number of available activation coordinates, such as neurons or channels. |
-| `s` | Sparsity setting | If `0 < s <= 1`, it is the fraction of coordinates used by each feature. If `s > 1`, it is the support count directly. |
+| `s` | Sparsity setting | Fraction of coordinates used by each feature, restricted to `0 < s <= 1`. |
 | `d_eff` | Effective dimension | The model's estimate of how many coordinates are effectively available to each sparse direction. |
 | `M` | Dictionary size | Total number of possible feature directions stored in the representation. |
 | `K` | Active-feature count | Number of features simultaneously present in one state `X`. This is the plotted capacity. |
@@ -58,10 +58,8 @@ The effective dimension used by the approximation is
 
 ```math
 d_{\mathrm{eff}} =
-\begin{cases}
-\min(N,sN), & 0 < s \le 1, \\
-\min(N,s), & s > 1.
-\end{cases}
+\min(N,sN)=sN,
+\qquad 0 < s \le 1.
 ```
 
 For example, `N = 1024` and `s = 0.25` give `d_eff = 256`: each feature direction effectively uses 256 of the 1024 coordinates.

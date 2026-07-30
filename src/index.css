@@ -69,7 +69,37 @@ input[type='range'] {
   accent-color: oklch(0.48 0.18 255);
 }
 
-.math-block mjx-container {
+.math-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.math-block mjx-container[display='true'] {
+  display: block !important;
+  width: max-content;
+  min-width: 100%;
   margin: 0 !important;
-  min-width: max-content;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.math-block mjx-container[display='true'] svg {
+  display: block;
+  max-width: none;
+}
+
+.inline-math {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: -0.08em;
+  white-space: nowrap;
+}
+
+.inline-math mjx-container {
+  display: inline-block !important;
+  margin: 0 0.08em !important;
+  white-space: nowrap;
 }

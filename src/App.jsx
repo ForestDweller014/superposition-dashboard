@@ -43,8 +43,8 @@ function fmtAxisDecimal(x) {
 }
 
 function supportCountFromInput(s, N) {
-  if (!Number.isFinite(s) || s <= 0 || !Number.isFinite(N) || N <= 0) return 0;
-  return s <= 1 ? s * N : s;
+  if (!Number.isFinite(s) || s <= 0 || s > 1 || !Number.isFinite(N) || N <= 0) return 0;
+  return s * N;
 }
 
 function effectiveDimension(N, s) {
@@ -96,14 +96,14 @@ function solveKFromE(E, N, s, mFactor) {
   return { K, dEff, discriminant, thresholdK };
 }
 
-function MathText({ children }) {
-  return <span>{children}</span>;
+function InlineMath({ children }) {
+  return <span className="inline-math">{String.raw`\(${children}\)`}</span>;
 }
 
 function MathBlock({ children }) {
   return (
-    <div className="math-block overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-slate-900">
-      {String.raw`\[${children}\]`}
+    <div className="math-block rounded-xl border border-slate-200 bg-slate-50 text-slate-900">
+      <div className="math-scroll">{String.raw`\[${children}\]`}</div>
     </div>
   );
 }
@@ -164,23 +164,20 @@ function TeXDocument() {
           <p>Let</p>
           <MathBlock>{String.raw`X = \sum_{j=1}^K a_j v_j,`}</MathBlock>
           <p>
-            <MathText>{String.raw`where \(V = \{v_1,\dots,v_M\}\) is a collection of unit vectors in \(\mathbb{R}^N\). We assume each \(v_i\) is sparse, with sparsity parameter \(s\). If \(0 < s \le 1\), each vector has support size at most \(sN\). If \(s > 1\), each vector has support size at most \(s\).`}</MathText>
+            Let <InlineMath>{String.raw`V=\{v_1,\dots,v_M\}`}</InlineMath> be a collection of unit vectors in{' '}
+            <InlineMath>{String.raw`\mathbb{R}^N`}</InlineMath>. Each <InlineMath>{String.raw`v_i`}</InlineMath> is sparse,
+            with <InlineMath>{String.raw`0<s\le 1`}</InlineMath> denoting the fraction of its coordinates that are nonzero.
           </p>
           <p>Define the effective dimension</p>
-          <MathBlock>{String.raw`d_{\mathrm{eff}} =
-\begin{cases}
-\min(N,sN), & 0 < s \le 1,\\[4pt]
-\min(N,s), & s > 1.
-\end{cases}`}</MathBlock>
+          <MathBlock>{String.raw`d_{\mathrm{eff}}=\min(N,sN)=sN,\qquad 0<s\le 1.`}</MathBlock>
           <p>
             We study the pairwise overlap distribution and the readout error incurred when recovering a coefficient
-            <MathText>{String.raw` \(a_i\) `}</MathText>
-            from the superposed vector
-            <MathText>{String.raw` \(X\)`}</MathText>.
+            {' '}<InlineMath>{String.raw`a_i`}</InlineMath> from the superposed vector{' '}
+            <InlineMath>{String.raw`X`}</InlineMath>.
           </p>
           <p>
-            Mechanistically, <MathText>{String.raw`\(M\)`}</MathText> counts all feature directions available to the
-            representation, while <MathText>{String.raw`\(K\)`}</MathText> counts only the features active in this one
+            Mechanistically, <InlineMath>{String.raw`M`}</InlineMath> counts all feature directions available to the
+            representation, while <InlineMath>{String.raw`K`}</InlineMath> counts only the features active in this one
             superposed state.
           </p>
         </section>
@@ -205,19 +202,16 @@ function TeXDocument() {
           <MathBlock>{String.raw`\alpha := \langle v_i, v_j \rangle \approx \mathcal{N}(0,\epsilon^2), \qquad i \ne j,`}</MathBlock>
           <p>where</p>
           <MathBlock>{String.raw`\epsilon^2 \approx \max\!\left(0,\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right).`}</MathBlock>
-          <p>
-            <MathText>{String.raw`The readout error for coefficient \(a_i\) is approximately Gaussian:`}</MathText>
-          </p>
+          <p>The readout error for coefficient <InlineMath>{String.raw`a_i`}</InlineMath> is approximately Gaussian:</p>
           <MathBlock>{String.raw`\beta \approx \mathcal{N}\!\left(0,(K-1)\epsilon^2\right).`}</MathBlock>
           <p>Therefore the readout-error standard deviation is</p>
           <MathBlock>{String.raw`E = \sqrt{K-1}\,\epsilon.`}</MathBlock>
-          <p>
-            <MathText>{String.raw`If \(M\) is treated as free, then`}</MathText>
-          </p>
+          <p>If <InlineMath>{String.raw`M`}</InlineMath> is treated as free, then</p>
           <MathBlock>{String.raw`K = 1 + \frac{E^2}{\epsilon^2}
 = 1 + \frac{E^2 d_{\mathrm{eff}}(M-1)}{M-d_{\mathrm{eff}}}.`}</MathBlock>
           <p>
-            <MathText>{String.raw`If one imposes \(M = cK\) with \(c = \mathrm{M\_factor} > 0\), then \(K\) obeys`}</MathText>
+            If one imposes <InlineMath>{String.raw`M=cK`}</InlineMath> with <InlineMath>{String.raw`c>0`}</InlineMath>,
+            then <InlineMath>{String.raw`K`}</InlineMath> obeys
           </p>
           <MathBlock>{String.raw`cK^2 - \bigl((c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}}\bigr)K + \bigl(d_{\mathrm{eff}} + E^2 d_{\mathrm{eff}}\bigr) = 0,`}</MathBlock>
           <p>and the relevant branch is</p>
@@ -231,19 +225,23 @@ function TeXDocument() {
           <p>with variance</p>
           <MathBlock>{String.raw`\epsilon^2 \approx \max\!\left(0,\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right).`}</MathBlock>
           <p>
-            <MathText>{String.raw`To recover feature \(a_i\), take the inner product with \(v_i\):`}</MathText>
+            To recover feature <InlineMath>{String.raw`a_i`}</InlineMath>, take the inner product with{' '}
+            <InlineMath>{String.raw`v_i`}</InlineMath>:
           </p>
           <MathBlock>{String.raw`X v_i^\top
 = \left(\sum_{j=1}^K a_j v_j\right) v_i^\top
 = a_i \langle v_i, v_i \rangle + \sum_{j \ne i} a_j \langle v_j, v_i \rangle.`}</MathBlock>
           <p>
-            <MathText>{String.raw`Since \(v_i\) is unit norm, \(\langle v_i, v_i \rangle = 1\), so`}</MathText>
+            Since <InlineMath>{String.raw`v_i`}</InlineMath> is unit norm,{' '}
+            <InlineMath>{String.raw`\langle v_i,v_i\rangle=1`}</InlineMath>, so
           </p>
           <MathBlock>{String.raw`X v_i^\top = a_i + \eta_i,
 \qquad
 \eta_i := \sum_{j \ne i} a_j \langle v_j, v_i \rangle.`}</MathBlock>
           <p>
-            <MathText>{String.raw`Under the standard approximation that the coefficients \(a_j\) are unit-scale and the cross-terms are approximately independent with variance \(\epsilon^2\),`}</MathText>
+            Under the standard approximation that the coefficients <InlineMath>{String.raw`a_j`}</InlineMath> are
+            unit-scale and the cross-terms are approximately independent with variance{' '}
+            <InlineMath>{String.raw`\epsilon^2`}</InlineMath>,
           </p>
           <MathBlock>{String.raw`\operatorname{Var}(\eta_i) \approx (K-1)\epsilon^2.`}</MathBlock>
           <p>Hence</p>
@@ -251,35 +249,35 @@ function TeXDocument() {
 \qquad
 E = \sqrt{K-1}\,\epsilon.`}</MathBlock>
           <p>
-            <MathText>{String.raw`Solving \(E^2=(K-1)\epsilon^2\) gives \(K=1+E^2/\epsilon^2\). Substituting \(M=cK\) gives`}</MathText>
+            Solving <InlineMath>{String.raw`E^2=(K-1)\epsilon^2`}</InlineMath> gives{' '}
+            <InlineMath>{String.raw`K=1+E^2/\epsilon^2`}</InlineMath>. Substituting{' '}
+            <InlineMath>{String.raw`M=cK`}</InlineMath> gives
           </p>
           <MathBlock>{String.raw`E^2 = (K-1)\frac{cK-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(cK-1)}.`}</MathBlock>
           <p>Multiplying through and moving all terms to one side gives</p>
           <MathBlock>{String.raw`0 = cK^2 - \bigl((c+d_{\mathrm{eff}}) + cE^2 d_{\mathrm{eff}}\bigr)K + \bigl(d_{\mathrm{eff}} + E^2 d_{\mathrm{eff}}\bigr).`}</MathBlock>
-          <p>Taking the larger quadratic branch gives the plotted formula for <MathText>{String.raw`\(K(E)\)`}</MathText>.</p>
+          <p>Taking the larger quadratic branch gives the plotted formula for <InlineMath>{String.raw`K(E)`}</InlineMath>.</p>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-slate-900">Corollary</h2>
           <p>
-            <MathText>{String.raw`If one wishes to express the readout error distribution directly in terms of \(M\) and \(d_{\mathrm{eff}}\), then`}</MathText>
+            To express the readout error distribution directly in terms of <InlineMath>{String.raw`M`}</InlineMath> and{' '}
+            <InlineMath>{String.raw`d_{\mathrm{eff}}`}</InlineMath>, substitute the overlap variance:
           </p>
           <MathBlock>{String.raw`\beta \approx \mathcal{N}\!\left(0,(K-1)\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right).`}</MathBlock>
           <p>Hence the readout-error standard deviation is</p>
           <MathBlock>{String.raw`E = \sqrt{(K-1)\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}}.`}</MathBlock>
           <p>
-            <MathText>{String.raw`If, in addition, \(M=cK\), then \(K=M/c\), and this becomes`}</MathText>
+            If, in addition, <InlineMath>{String.raw`M=cK`}</InlineMath>, then{' '}
+            <InlineMath>{String.raw`K=M/c`}</InlineMath>, and this becomes
           </p>
           <MathBlock>{String.raw`\beta \approx \mathcal{N}\!\left(0,\left(\frac{M}{c}-1\right)\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right).`}</MathBlock>
         </section>
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold text-slate-900">Compact summary</h2>
-          <MathBlock>{String.raw`d_{\mathrm{eff}}=
-\begin{cases}
-\min(N,sN), & 0 < s \le 1,\\[4pt]
-\min(N,s), & s > 1,
-\end{cases}`}</MathBlock>
+          <MathBlock>{String.raw`d_{\mathrm{eff}}=\min(N,sN)=sN,\qquad 0<s\le 1.`}</MathBlock>
           <MathBlock>{String.raw`\alpha \approx \mathcal{N}(0,\epsilon^2),
 \qquad
 \epsilon^2 \approx \max\!\left(0,\frac{M-d_{\mathrm{eff}}}{d_{\mathrm{eff}}(M-1)}\right),`}</MathBlock>
@@ -305,7 +303,10 @@ export default function SparseSuperpositionKPlot() {
   const s = parseNumber(sText);
   const mFactor = parseNumber(mText);
 
-  const valid = Number.isFinite(N) && N > 0 && Number.isFinite(s) && s > 0 && Number.isFinite(mFactor) && mFactor > 0;
+  const validN = Number.isFinite(N) && N > 0;
+  const validS = Number.isFinite(s) && s > 0 && s <= 1;
+  const validFactor = Number.isFinite(mFactor) && mFactor > 0;
+  const valid = validN && validS && validFactor;
 
   const derived = useMemo(() => {
     const dEff = effectiveDimension(N, s);
@@ -449,6 +450,11 @@ export default function SparseSuperpositionKPlot() {
                   <Input
                     id="sinput"
                     aria-describedby="shelp"
+                    aria-invalid={!validS}
+                    type="number"
+                    min="0.001"
+                    max="1"
+                    step="0.001"
                     value={sText}
                     onChange={(e) => setSText(e.target.value)}
                     className="max-w-28"
@@ -464,9 +470,10 @@ export default function SparseSuperpositionKPlot() {
                   onChange={(e) => setSText(e.target.value)}
                   className="w-full"
                 />
-                <p id="shelp" className="text-xs leading-5 text-slate-500">
-                  From 0 to 1, s is the fraction of coordinates used by each feature. Above 1, a typed value is treated
-                  as the support count directly.
+                <p id="shelp" className={`text-xs leading-5 ${validS ? 'text-slate-500' : 'font-medium text-red-600'}`}>
+                  {validS
+                    ? 's is the fraction of coordinates used by each feature and must be greater than 0 and at most 1.'
+                    : 'Enter a sparsity greater than 0 and at most 1. Values outside this interval are invalid.'}
                 </p>
               </div>
 
@@ -550,7 +557,9 @@ export default function SparseSuperpositionKPlot() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="py-24 text-center text-sm text-slate-600">Enter positive values for N, s, and c.</div>
+                <div className="py-24 text-center text-sm text-slate-600">
+                  Enter positive values for N and c, and a sparsity s greater than 0 and at most 1.
+                </div>
               )}
               <p className="text-sm leading-6 text-slate-600">
                 Read the curve up and to the right: accepting more typical decoder noise permits more active features.
